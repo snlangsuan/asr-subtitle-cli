@@ -17,6 +17,7 @@ program
   .command('convert <video_path>')
   .description('Convert video to subtitle')
   .addOption(new Option('-f --format <format>', 'Set output format (srt or vtt)').choices(['srt', 'vtt']).default('srt'))
+  .addOption(new Option('-l --language <language>', 'Set output language').choices(['th', 'en']).default('th'))
   .option('-o --output <output_path>', 'Set output path')
   .action(convertVideo)
 

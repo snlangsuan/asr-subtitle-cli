@@ -6,28 +6,24 @@ import ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import cliProgress from 'cli-progress'
+import { getAppToken } from './libs/utils.mjs'
+import WebSocket from 'ws'
+import { ASR_WEBSOCKET_URL } from './constants.mjs'
+
 
 ffmpeg.setFfmpegPath(ffmpegPath)
 ffmpeg.setFfprobePath(ffprobePath)
 
 async function convertVideoToMp3(videoPath, audioPath) {
   return new Promise((resolve, reject) => {
-    if (!fs.existsSync(videoPath)) {
-      return reject(new Error(`Input video file not found: ${videoPath}`))
-    }
+    if (!fs.existsSync(videoPath)) return reject(new Error(`Input video file not found: ${videoPath}`))
 
     ffmpeg(videoPath)
       .noVideo()
       .audioCodec('libmp3lame')
       .audioBitrate('128k')
-      .on('end', () => {
-        console.log(`Conversion to MP3 finished. Saved to: ${audioPath}`)
-        resolve()
-      })
-      .on('error', (err) => {
-        console.error('Error during conversion:', err.message)
-        reject(err)
-      })
+      .on('end', () => resolve())
+      .on('error', reject)
       .save(audioPath)
   })
 }
@@ -35,33 +31,21 @@ async function convertVideoToMp3(videoPath, audioPath) {
 async function chunkAudio(audioPath, outputDir, duration) {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(audioPath, (err, metadata) => {
-      if (err) {
-        console.error('Error getting media metadata:', err.message)
-        return reject(err)
-      }
+      if (err) return reject(err)
+
       const totalDuration = metadata.format.duration
       if (!totalDuration || totalDuration === 'N/A') {
         return reject(new Error('Could not determine the duration of the audio file.'))
       }
 
-      console.log(`Total duration: ${totalDuration} seconds.`)
       if (!fs.existsSync(outputDir)) {
         fs.mkdirSync(outputDir, { recursive: true })
-        console.log(`Created temporary chunk folder: ${outputDir}`)
       }
 
       let completedChunks = 0
       const totalChunks = Math.ceil(totalDuration / duration)
 
-      if (totalChunks === 0) {
-        console.log('Audio is too short to be chunked.')
-        return resolve()
-      }
-
-      console.log(`Splitting into ${totalChunks} chunks of ${duration} seconds each.`)
-
-      const bar1 = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic)
-      bar1.start(totalChunks, 0)
+      if (totalChunks === 0) return resolve()
 
       const chunkPath = []
       for (let i = 0; i < totalDuration; i += duration) {
@@ -74,21 +58,65 @@ async function chunkAudio(audioPath, outputDir, duration) {
           .output(outputChunkPath)
           .on('end', () => {
             completedChunks++
-            bar1.increment()
             if (completedChunks === totalChunks) {
-              bar1.stop()
-              console.log('All chunks have been created successfully!')
               resolve(chunkPath)
             }
           })
-          .on('error', (err) => {
-            console.error(`Error processing chunk ${chunkIndex}:`, err.message)
-            reject(err)
-          })
+          .on('error', reject)
           .run()
       }
     })
   })
+}
+
+function readFileBase64(filePath) {
+  const buffer = fs.readFileSync(filePath)
+  const base64String = buffer.toString('base64')
+  return Buffer.from(base64String, 'base64')
+}
+
+async function generateSubtitle(files, chunkSize, language) {
+  if (files.length < 1) throw new Error('No files to process')
+  const token = await getAppToken()
+  if (!token) throw new Error('No token found')
+  console.log(token)
+  const totalChunks = files.length
+  let completedChunks = 0
+  const subtitleData = []
+  return new Promise((resolve, reject) => {
+    const bar1 = new cliProgress.SingleBar({}, cliProgress.Presets.shades_classic)
+    bar1.start(totalChunks, 0)
+    const socket = new WebSocket(`${ASR_WEBSOCKET_URL}?target_language=${language}`, { headers: { 'x-api-key': token } })
+    socket.on('open', () => {
+      console.log('connected')
+      socket.send(readFileBase64(files.pop()), { binary: true })
+    })
+    socket.on('error', reject)
+
+    socket.on('message', (data) => {
+      const message = JSON.parse(data)
+      console.log(message)
+      const index = subtitleData.length
+      const start = index * chunkSize
+      const end = start + chunkSize
+      subtitleData.push({
+        start,
+        end,
+        text: message.text
+      })
+      completedChunks += 1
+       bar1.increment()
+      if (files.length > 0) socket.send(readFileBase64(files.pop()), { binary: true })
+      if (completedChunks === totalChunks) {
+        socket.close()
+        bar1.stop()
+        resolve(subtitleData)
+      }
+    })
+  })
+  // for (const file of files) {
+
+  // }
 }
 
 export async function convertVideo(videoPath, options) {
@@ -103,9 +131,12 @@ export async function convertVideo(videoPath, options) {
   const outputChunkPath = path.join(os.tmpdir(), `video-chunks-${Date.now()}`)
   const tempAudioFile = path.join(os.tmpdir(), `temp_audio_${Date.now()}.mp3`)
   try {
+    console.log('Reading video file...')
     await convertVideoToMp3(videoPath, tempAudioFile)
+    console.log('Transcoding audio file...')
     const chunkPath = await chunkAudio(tempAudioFile, outputChunkPath, chunkDuration)
-    console.log(chunkPath)    
+    const subtitleData = await generateSubtitle(chunkPath, chunkDuration, options.language)
+    console.log(subtitleData)
   } catch (error) {
     console.log(chalk.red(`[error] convert error: ${error.message}`))
   } finally {
