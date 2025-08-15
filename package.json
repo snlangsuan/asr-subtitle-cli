@@ -25,6 +25,7 @@
     "file-type": "^21.0.0",
     "fluent-ffmpeg": "^2.1.3",
     "keytar": "^7.9.0",
+    "subsrt-ts": "^2.1.2",
     "ws": "^8.18.3"
   }
 }

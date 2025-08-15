@@ -1230,6 +1230,11 @@ strtok3@^10.2.2:
   dependencies:
     "@tokenizer/token" "^0.3.0"
 
+subsrt-ts@^2.1.2:
+  version "2.1.2"
+  resolved "https://registry.yarnpkg.com/subsrt-ts/-/subsrt-ts-2.1.2.tgz#d219d1f8572dbecf695f6589d228c59c272ee031"
+  integrity sha512-45yNlK42Z0pz4lAaNYbR5P60M2jmHl+gfAaiJxDIXsXXqoE7TkDCzl/00HgWyZXKkdIU6s8FiNtRvrlOZb+5Qg==
+
 supports-color@^7.1.0:
   version "7.2.0"
   resolved "https://registry.yarnpkg.com/supports-color/-/supports-color-7.2.0.tgz#1b7dcdcb32b8138801b3e478ba6a51caa89648da"

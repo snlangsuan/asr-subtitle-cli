@@ -2,8 +2,9 @@
 
 import { Option, program } from 'commander'
 import pckg from './../package.json' with { type: 'json' }
-import { setAuthToken } from './auth.mjs'
-import { convertVideo } from './convert.mjs'
+import auth from './auth.mjs'
+import generate from './generate.mjs'
+import convert from './convert.mjs'
 
 program
   .version(pckg.version)
@@ -11,14 +12,21 @@ program
 program
   .command('login <token>')
   .description('Login and save the App Token')
-  .action(setAuthToken)
+  .action(auth)
 
 program
-  .command('convert <video_path>')
-  .description('Convert video to subtitle')
+  .command('generate <video_path>')
+  .description('Generate subtitles for a video')
   .addOption(new Option('-f --format <format>', 'Set output format (srt or vtt)').choices(['srt', 'vtt']).default('srt'))
   .addOption(new Option('-l --language <language>', 'Set output language').choices(['th', 'en']).default('th'))
   .option('-o --output <output_path>', 'Set output path')
-  .action(convertVideo)
+  .action(generate)
+
+program
+  .command('convert <source>')
+  .description('Convert SRT or VTT to SRT or VTT')
+  .addOption(new Option('-f --format <format>', 'Set output format (srt or vtt)').choices(['srt', 'vtt']).default('srt'))
+  .option('-o --output <output_path>', 'Set output path')
+  .action(convert)
 
 program.parse(process.argv)

@@ -13,7 +13,7 @@ async function validateToken(token) {
   }
 }
 
-export async  function setAuthToken(token) {
+export default async  function setAuthToken(token) {
   if (!token) {
     console.log(chalk.red('[error] Please provide your token.'))
     return
